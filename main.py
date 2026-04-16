@@ -171,6 +171,53 @@ def top_importers_2023(import_df: pd.DataFrame) -> pd.DataFrame:
     return top_10
 
 
+def dependency_risk_2023(import_df: pd.DataFrame) -> pd.DataFrame:
+    """Return the top 10 countries by dependence on Persian Gulf imports in 2023."""
+    imports_2023 = import_df.copy()
+    imports_2023["Y2023"] = pd.to_numeric(imports_2023["Y2023"], errors="coerce")
+    imports_2023 = imports_2023.dropna(subset=["Y2023"])
+    imports_2023 = imports_2023.loc[
+        ~imports_2023["Reporter Countries"].isin(PERSIAN_GULF_COUNTRIES)
+    ].copy()
+
+    total_imports_2023 = (
+        imports_2023.groupby("Reporter Countries", as_index=False)["Y2023"]
+        .sum()
+        .rename(columns={"Y2023": "Total Imports 2023 (t)"})
+    )
+
+    gulf_imports_2023 = (
+        imports_2023.loc[
+            imports_2023["Partner Countries"].isin(PERSIAN_GULF_COUNTRIES)
+        ]
+        .groupby("Reporter Countries", as_index=False)["Y2023"]
+        .sum()
+        .rename(columns={"Y2023": "Gulf Imports 2023 (t)"})
+    )
+
+    dependency_df = total_imports_2023.merge(
+        gulf_imports_2023, on="Reporter Countries", how="left"
+    )
+    dependency_df["Gulf Imports 2023 (t)"] = dependency_df[
+        "Gulf Imports 2023 (t)"
+    ].fillna(0)
+    dependency_df = dependency_df.loc[
+        dependency_df["Total Imports 2023 (t)"] > 0
+    ].copy()
+    dependency_df["Dependency (%)"] = (
+        dependency_df["Gulf Imports 2023 (t)"]
+        / dependency_df["Total Imports 2023 (t)"]
+        * 100
+    )
+
+    top_10 = (
+        dependency_df.sort_values("Dependency (%)", ascending=False)
+        .head(10)
+        .rename(columns={"Reporter Countries": "Country"})
+    )
+    return top_10
+
+
 def main() -> None:
     df = load_data()
 
@@ -182,6 +229,7 @@ def main() -> None:
 
     import_df = prepare_import_rows(df)
     top_importers_df = top_importers_2023(import_df)
+    dependency_df = dependency_risk_2023(import_df)
 
     chart_one = plot_gulf_exports_over_time(gulf_exports_df)
     chart_two = plot_gulf_urea_share_of_global_exports(share_df)
@@ -194,6 +242,8 @@ def main() -> None:
     print(f"Saved: {chart_two.name}")
     print("\nTop 10 importers in 2023 from Persian Gulf countries:")
     print(top_importers_df.to_string(index=False))
+    print("\nTop 10 countries by dependency risk in 2023:")
+    print(dependency_df.to_string(index=False))
 
 
 if __name__ == "__main__":
