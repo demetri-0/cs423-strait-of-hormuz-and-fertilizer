@@ -33,6 +33,11 @@ def prepare_export_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[df["Element"] == "Export quantity (tonnes N)"].copy()
 
 
+def prepare_import_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only nitrogen import rows from the assignment dataset."""
+    return df.loc[df["Element"] == "Import quantity (tonnes N)"].copy()
+
+
 def reshape_years_long(df: pd.DataFrame) -> pd.DataFrame:
     """Convert wide Y1990...Y2023 columns into year/value rows."""
     year_columns = get_year_columns(df)
@@ -146,22 +151,49 @@ def plot_gulf_urea_share_of_global_exports(share_df: pd.DataFrame) -> Path:
     return output_path
 
 
+def top_importers_2023(import_df: pd.DataFrame) -> pd.DataFrame:
+    """Return the top 10 nitrogen importers from Persian Gulf countries in 2023."""
+    gulf_imports_2023 = import_df.loc[
+        import_df["Partner Countries"].isin(PERSIAN_GULF_COUNTRIES)
+    ].copy()
+    gulf_imports_2023["Y2023"] = pd.to_numeric(
+        gulf_imports_2023["Y2023"], errors="coerce"
+    )
+    gulf_imports_2023 = gulf_imports_2023.dropna(subset=["Y2023"])
+
+    top_10 = (
+        gulf_imports_2023.groupby("Reporter Countries", as_index=False)["Y2023"]
+        .sum()
+        .sort_values("Y2023", ascending=False)
+        .head(10)
+        .rename(columns={"Reporter Countries": "Importer", "Y2023": "2023 Imports (t)"})
+    )
+    return top_10
+
+
 def main() -> None:
     df = load_data()
+
     export_df = prepare_export_rows(df)
     long_df = reshape_years_long(export_df)
 
     gulf_exports_df = gulf_exports_over_time(long_df)
     share_df = gulf_urea_share_of_global_exports(long_df)
 
+    import_df = prepare_import_rows(df)
+    top_importers_df = top_importers_2023(import_df)
+
     chart_one = plot_gulf_exports_over_time(gulf_exports_df)
     chart_two = plot_gulf_urea_share_of_global_exports(share_df)
 
     print(f"Loaded rows: {len(df):,}")
     print(f"Nitrogen export rows: {len(export_df):,}")
+    print(f"Nitrogen import rows: {len(import_df):,}")
     print(f"Long-format rows: {len(long_df):,}")
     print(f"Saved: {chart_one.name}")
     print(f"Saved: {chart_two.name}")
+    print("\nTop 10 importers in 2023 from Persian Gulf countries:")
+    print(top_importers_df.to_string(index=False))
 
 
 if __name__ == "__main__":
