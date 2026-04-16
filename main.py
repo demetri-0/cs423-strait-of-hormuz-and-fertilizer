@@ -38,6 +38,11 @@ def prepare_import_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[df["Element"] == "Import quantity (tonnes N)"].copy()
 
 
+def prepare_total_export_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep total fertilizer export rows for global-share calculations."""
+    return df.loc[df["Element"] == "Export quantity"].copy()
+
+
 def reshape_years_long(df: pd.DataFrame) -> pd.DataFrame:
     """Convert wide Y1990...Y2023 columns into year/value rows."""
     year_columns = get_year_columns(df)
@@ -90,12 +95,12 @@ def plot_gulf_exports_over_time(exports_df: pd.DataFrame) -> Path:
     return output_path
 
 
-def gulf_urea_share_of_global_exports(long_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculate Persian Gulf urea exports as a share of global nitrogen exports."""
+def gulf_urea_share_of_global_exports(total_export_long_df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate Persian Gulf urea exports as a share of global fertilizer exports."""
     gulf_urea = (
-        long_df.loc[
-            long_df["Reporter Countries"].isin(PERSIAN_GULF_COUNTRIES)
-            & (long_df["Item"] == "Urea")
+        total_export_long_df.loc[
+            total_export_long_df["Reporter Countries"].isin(PERSIAN_GULF_COUNTRIES)
+            & (total_export_long_df["Item"] == "Urea")
         ]
         .groupby("year", as_index=False)["value"]
         .sum()
@@ -103,7 +108,7 @@ def gulf_urea_share_of_global_exports(long_df: pd.DataFrame) -> pd.DataFrame:
     )
 
     global_exports = (
-        long_df.groupby("year", as_index=False)["value"]
+        total_export_long_df.groupby("year", as_index=False)["value"]
         .sum()
         .rename(columns={"value": "global_exports"})
     )
@@ -127,7 +132,7 @@ def plot_gulf_urea_share_of_global_exports(share_df: pd.DataFrame) -> Path:
         label="Persian Gulf urea exports",
     )
     ax1.set_xlabel("Year")
-    ax1.set_ylabel("Urea Export Quantity (tonnes N)", color="tab:blue")
+    ax1.set_ylabel("Urea Export Quantity (tonnes)", color="tab:blue")
     ax1.tick_params(axis="y", labelcolor="tab:blue")
 
     ax2 = ax1.twinx()
@@ -142,7 +147,7 @@ def plot_gulf_urea_share_of_global_exports(share_df: pd.DataFrame) -> Path:
     ax2.set_ylabel("Share of Global Exports (%)", color="tab:red")
     ax2.tick_params(axis="y", labelcolor="tab:red")
 
-    fig.suptitle("Persian Gulf Urea Exports and Share of Global Nitrogen Exports")
+    fig.suptitle("Persian Gulf Urea Exports and Share of Global Fertilizer Exports")
     fig.tight_layout()
 
     output_path = OUTPUT_DIR / "persian_gulf_urea_share_of_global_exports.png"
@@ -223,9 +228,11 @@ def main() -> None:
 
     export_df = prepare_export_rows(df)
     long_df = reshape_years_long(export_df)
+    total_export_df = prepare_total_export_rows(df)
+    total_export_long_df = reshape_years_long(total_export_df)
 
     gulf_exports_df = gulf_exports_over_time(long_df)
-    share_df = gulf_urea_share_of_global_exports(long_df)
+    share_df = gulf_urea_share_of_global_exports(total_export_long_df)
 
     import_df = prepare_import_rows(df)
     top_importers_df = top_importers_2023(import_df)
@@ -236,6 +243,7 @@ def main() -> None:
 
     print(f"Loaded rows: {len(df):,}")
     print(f"Nitrogen export rows: {len(export_df):,}")
+    print(f"Total export rows: {len(total_export_df):,}")
     print(f"Nitrogen import rows: {len(import_df):,}")
     print(f"Long-format rows: {len(long_df):,}")
     print(f"Saved: {chart_one.name}")
